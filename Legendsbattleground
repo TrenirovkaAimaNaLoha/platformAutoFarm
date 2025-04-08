@@ -7,6 +7,8 @@ local hrp = character:WaitForChild("HumanoidRootPart")
 local ROOM_HEIGHT = 13400
 local ROOM_SIZE = 80
 local WALL_HEIGHT = 520
+local floor_THICKNESS = 11 -- толщина пола
+local WALL_THICKNESS = 14 -- толщина стен
 local ROOM_NAME = "AutoFarmZone"
 local TRANSPARENCY = 0.9
 
@@ -16,7 +18,7 @@ local function createSkyRoom()
 
 	-- Пол
 	local floor = Instance.new("Part")
-	floor.Size = Vector3.new(ROOM_SIZE, 1, ROOM_SIZE)
+	floor.Size = Vector3.new(ROOM_SIZE, floor_THICKNESS, ROOM_SIZE)
 	floor.Position = center
 	floor.Anchored = true
 	floor.BrickColor = BrickColor.new("Bright green")
@@ -24,12 +26,22 @@ local function createSkyRoom()
 	floor.Name = ROOM_NAME
 	floor.Parent = workspace
 
+	-- Потолок
+	local ceiling = Instance.new("Part")
+	ceiling.Size = Vector3.new(ROOM_SIZE, 1, ROOM_SIZE)
+	ceiling.Position = center + Vector3.new(0, WALL_HEIGHT, 0)
+	ceiling.Anchored = true
+	ceiling.BrickColor = BrickColor.new("Bright green")
+	ceiling.Transparency = TRANSPARENCY
+	ceiling.Name = ROOM_NAME
+	ceiling.Parent = workspace
+
 	local wallDistance = ROOM_SIZE / 2
 	local walls = {
-		Vector3.new(-wallDistance, WALL_HEIGHT / 2, 0),   -- Лево
-		Vector3.new(wallDistance, WALL_HEIGHT / 2, 0),    -- Право
-		Vector3.new(0, WALL_HEIGHT / 2, -wallDistance),   -- Назад
-		Vector3.new(0, WALL_HEIGHT / 2, wallDistance),    -- Вперёд
+		Vector3.new(-wallDistance - WALL_THICKNESS / 2, WALL_HEIGHT / 2, 0),   -- Лево
+		Vector3.new(wallDistance + WALL_THICKNESS / 2, WALL_HEIGHT / 2, 0),    -- Право
+		Vector3.new(0, WALL_HEIGHT / 2, -wallDistance - WALL_THICKNESS / 2),   -- Назад
+		Vector3.new(0, WALL_HEIGHT / 2, wallDistance + WALL_THICKNESS / 2),    -- Вперёд
 	}
 
 	for _, offset in ipairs(walls) do
@@ -40,9 +52,9 @@ local function createSkyRoom()
 		wall.Name = ROOM_NAME
 
 		if math.abs(offset.X) > 0 then
-			wall.Size = Vector3.new(1, WALL_HEIGHT, ROOM_SIZE)
+			wall.Size = Vector3.new(WALL_THICKNESS, WALL_HEIGHT, ROOM_SIZE)
 		else
-			wall.Size = Vector3.new(ROOM_SIZE, WALL_HEIGHT, 1)
+			wall.Size = Vector3.new(ROOM_SIZE, WALL_HEIGHT, WALL_THICKNESS)
 		end
 
 		wall.Position = center + offset
@@ -52,11 +64,24 @@ local function createSkyRoom()
 	return center + Vector3.new(0, 5, 0)
 end
 
+-- Следит за позицией игрока и возвращает в комнату
+local function enforceStay(pos)
+	while true do
+		task.wait(1)
+		if hrp.Position.Y < ROOM_HEIGHT - 10 or hrp.Position.Y > ROOM_HEIGHT + WALL_HEIGHT then
+			hrp.CFrame = CFrame.new(pos)
+		end
+	end
+end
+
 -- Создаёт и телепортирует
 local function teleportToSkyRoom()
 	local pos = createSkyRoom()
 	task.wait(0.3)
 	hrp.CFrame = CFrame.new(pos)
+	task.spawn(function()
+		enforceStay(pos)
+	end)
 end
 
 teleportToSkyRoom()
