@@ -1,0 +1,62 @@
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local hrp = character:WaitForChild("HumanoidRootPart")
+
+-- Настройки комнаты
+local ROOM_HEIGHT = 400
+local ROOM_SIZE = 80
+local WALL_HEIGHT = 220
+local ROOM_NAME = "AutoFarmZone"
+local TRANSPARENCY = 0.3
+
+-- Создаёт прозрачную комнату в небе
+local function createSkyRoom()
+	local center = Vector3.new(0, ROOM_HEIGHT, 0)
+
+	-- Пол
+	local floor = Instance.new("Part")
+	floor.Size = Vector3.new(ROOM_SIZE, 1, ROOM_SIZE)
+	floor.Position = center
+	floor.Anchored = true
+	floor.BrickColor = BrickColor.new("Bright green")
+	floor.Transparency = TRANSPARENCY
+	floor.Name = ROOM_NAME
+	floor.Parent = workspace
+
+	local wallDistance = ROOM_SIZE / 2
+	local walls = {
+		Vector3.new(-wallDistance, WALL_HEIGHT / 2, 0),   -- Лево
+		Vector3.new(wallDistance, WALL_HEIGHT / 2, 0),    -- Право
+		Vector3.new(0, WALL_HEIGHT / 2, -wallDistance),   -- Назад
+		Vector3.new(0, WALL_HEIGHT / 2, wallDistance),    -- Вперёд
+	}
+
+	for _, offset in ipairs(walls) do
+		local wall = Instance.new("Part")
+		wall.Anchored = true
+		wall.BrickColor = BrickColor.new("Really black")
+		wall.Transparency = TRANSPARENCY
+		wall.Name = ROOM_NAME
+
+		if math.abs(offset.X) > 0 then
+			wall.Size = Vector3.new(1, WALL_HEIGHT, ROOM_SIZE)
+		else
+			wall.Size = Vector3.new(ROOM_SIZE, WALL_HEIGHT, 1)
+		end
+
+		wall.Position = center + offset
+		wall.Parent = workspace
+	end
+
+	return center + Vector3.new(0, 5, 0)
+end
+
+-- Создаёт и телепортирует
+local function teleportToSkyRoom()
+	local pos = createSkyRoom()
+	task.wait(0.3)
+	hrp.CFrame = CFrame.new(pos)
+end
+
+teleportToSkyRoom()
