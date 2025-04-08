@@ -1,87 +1,302 @@
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local hrp = character:WaitForChild("HumanoidRootPart")
+local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+if not hrp then
+	player.CharacterAdded:Wait()
+	hrp = player.Character:WaitForChild("HumanoidRootPart")
+end
 
--- Настройки комнаты
-local ROOM_HEIGHT = 13400
+local UIS = game:GetService("UserInputService")
+local draggingFrame = false
+local dragStart
+local startPos
+
+local scrollFrame = Instance.new("ScrollingFrame", frame)
+scrollFrame.Size = UDim2.new(1, -20, 1, -90)
+scrollFrame.Position = UDim2.new(0, 10, 0, 60)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.BorderSizePixel = 0
+scrollFrame.ScrollBarThickness = 6
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+scrollFrame.ClipsDescendants = true
+
+
+local StarterPosition = hrp.Position
 local ROOM_SIZE = 80
 local WALL_HEIGHT = 520
-local floor_THICKNESS = 11 -- толщина пола
-local WALL_THICKNESS = 14 -- толщина стен
+local WALL_THICKNESS = 14
+local FLOOR_THICKNESS = 11
 local ROOM_NAME = "AutoFarmZone"
 local TRANSPARENCY = 0.9
 
--- Создаёт прозрачную комнату в небе
+local ROOM_HEIGHT = 13400
+local stayInRoom = false
+local skyRoomPosition
+
+local function createGradient(parent)
+	local uiGradient = Instance.new("UIGradient", parent)
+	uiGradient.Color = ColorSequence.new{
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 127)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 255))
+	}
+	uiGradient.Rotation = 45
+end
+
+-- Комната в небе
 local function createSkyRoom()
 	local center = Vector3.new(0, ROOM_HEIGHT, 0)
 
-	-- Пол
-	local floor = Instance.new("Part")
-	floor.Size = Vector3.new(ROOM_SIZE, floor_THICKNESS, ROOM_SIZE)
-	floor.Position = center
-	floor.Anchored = true
-	floor.BrickColor = BrickColor.new("Bright green")
-	floor.Transparency = TRANSPARENCY
-	floor.Name = ROOM_NAME
-	floor.Parent = workspace
+	local function createPart(size, position, color)
+		local part = Instance.new("Part", workspace)
+		part.Size = size
+		part.Position = position
+		part.Anchored = true
+		part.Transparency = TRANSPARENCY
+		part.BrickColor = BrickColor.new(color)
+		part.Name = ROOM_NAME
+		return part
+	end
 
-	-- Потолок
-	local ceiling = Instance.new("Part")
-	ceiling.Size = Vector3.new(ROOM_SIZE, 1, ROOM_SIZE)
-	ceiling.Position = center + Vector3.new(0, WALL_HEIGHT, 0)
-	ceiling.Anchored = true
-	ceiling.BrickColor = BrickColor.new("Bright green")
-	ceiling.Transparency = TRANSPARENCY
-	ceiling.Name = ROOM_NAME
-	ceiling.Parent = workspace
+	createPart(Vector3.new(ROOM_SIZE, FLOOR_THICKNESS, ROOM_SIZE), center, "Bright green") -- пол
+	createPart(Vector3.new(ROOM_SIZE, 1, ROOM_SIZE), center + Vector3.new(0, WALL_HEIGHT, 0), "Bright green") -- потолок
 
-	local wallDistance = ROOM_SIZE / 2
-	local walls = {
-		Vector3.new(-wallDistance - WALL_THICKNESS / 2, WALL_HEIGHT / 2, 0),   -- Лево
-		Vector3.new(wallDistance + WALL_THICKNESS / 2, WALL_HEIGHT / 2, 0),    -- Право
-		Vector3.new(0, WALL_HEIGHT / 2, -wallDistance - WALL_THICKNESS / 2),   -- Назад
-		Vector3.new(0, WALL_HEIGHT / 2, wallDistance + WALL_THICKNESS / 2),    -- Вперёд
+	local wallOffset = ROOM_SIZE / 2
+	local offsets = {
+		Vector3.new(-wallOffset - WALL_THICKNESS / 2, WALL_HEIGHT / 2, 0),
+		Vector3.new(wallOffset + WALL_THICKNESS / 2, WALL_HEIGHT / 2, 0),
+		Vector3.new(0, WALL_HEIGHT / 2, -wallOffset - WALL_THICKNESS / 2),
+		Vector3.new(0, WALL_HEIGHT / 2, wallOffset + WALL_THICKNESS / 2)
 	}
 
-	for _, offset in ipairs(walls) do
-		local wall = Instance.new("Part")
-		wall.Anchored = true
-		wall.BrickColor = BrickColor.new("Really black")
-		wall.Transparency = TRANSPARENCY
-		wall.Name = ROOM_NAME
-
-		if math.abs(offset.X) > 0 then
-			wall.Size = Vector3.new(WALL_THICKNESS, WALL_HEIGHT, ROOM_SIZE)
-		else
-			wall.Size = Vector3.new(ROOM_SIZE, WALL_HEIGHT, WALL_THICKNESS)
-		end
-
-		wall.Position = center + offset
-		wall.Parent = workspace
+	for _, offset in ipairs(offsets) do
+		local size = math.abs(offset.X) > 0 and Vector3.new(WALL_THICKNESS, WALL_HEIGHT, ROOM_SIZE) or Vector3.new(ROOM_SIZE, WALL_HEIGHT, WALL_THICKNESS)
+		createPart(size, center + offset, "Really black")
 	end
 
 	return center + Vector3.new(0, 5, 0)
 end
 
--- Следит за позицией игрока и возвращает в комнату
-local function enforceStay(pos)
+-- Телепортация
+local function teleportToSkyRoom()
+	skyRoomPosition = createSkyRoom()
+	task.wait(0.3)
+	hrp.CFrame = CFrame.new(skyRoomPosition)
+	stayInRoom = true
+end
+
+local function teleportBack()
+	stayInRoom = false
+	hrp.CFrame = CFrame.new(StarterPosition)
+end
+
+-- Отслеживание смерти
+player.CharacterAdded:Connect(function(char)
+	task.wait(0.5)
+	hrp = char:WaitForChild("HumanoidRootPart")
+	if stayInRoom then
+		hrp.CFrame = CFrame.new(skyRoomPosition)
+	end
+end)
+
+-- Возвращение если игрок вышел
+task.spawn(function()
 	while true do
 		task.wait(1)
-		if hrp.Position.Y < ROOM_HEIGHT - 10 or hrp.Position.Y > ROOM_HEIGHT + WALL_HEIGHT then
-			hrp.CFrame = CFrame.new(pos)
+		if stayInRoom and (hrp.Position.Y < ROOM_HEIGHT - 10 or hrp.Position.Y > ROOM_HEIGHT + WALL_HEIGHT) then
+			hrp.CFrame = CFrame.new(skyRoomPosition)
 		end
+	end
+end)
+
+-- Создание GUI
+local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+gui.Name = "SkyRoomMenu"
+gui.ResetOnSpawn = false
+
+-- Кнопка открытия
+local openButton = Instance.new("TextButton", gui)
+openButton.Size = UDim2.new(0, 120, 0, 40)
+openButton.Position = UDim2.new(0, 10, 0, 10)
+openButton.Text = "Открыть Меню"
+openButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+openButton.TextColor3 = Color3.new(1, 1, 1)
+createGradient(openButton)
+
+-- Окно меню
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 300, 0, 360)
+frame.Position = UDim2.new(0.5, -150, 0.5, -140)
+frame.Visible = false
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+frame.BorderSizePixel = 0
+frame.Active = false
+frame.Draggable = true
+createGradient(frame)
+
+-- Название
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1, 0, 0, 30)
+title.Text = "Almighty.acc (LegendsBattle)"
+title.Font = Enum.Font.GothamBold
+title.TextColor3 = Color3.new(1, 1, 1)
+title.BackgroundTransparency = 1
+title.TextScaled = true
+
+-- Подпись с эффектом набора текста
+local subtitle = Instance.new("TextLabel", frame)
+subtitle.Size = UDim2.new(1, 0, 0, 20)
+subtitle.Position = UDim2.new(0, 0, 0, 30)
+subtitle.Text = ""
+subtitle.Font = Enum.Font.Code
+subtitle.TextColor3 = Color3.new(1, 1, 1)
+subtitle.BackgroundTransparency = 1
+subtitle.TextScaled = true
+
+-- Функция набора текста
+local function typeText(label, text, delayTime)
+	for i = 1, #text do
+		label.Text = string.sub(text, 1, i)
+		task.wait(delayTime or 0.05)
 	end
 end
 
--- Создаёт и телепортирует
-local function teleportToSkyRoom()
-	local pos = createSkyRoom()
-	task.wait(0.3)
-	hrp.CFrame = CFrame.new(pos)
-	task.spawn(function()
-		enforceStay(pos)
-	end)
+-- Эффект набора и стирания с курсором
+local function loopTypeErase(label, text, delayTime, eraseTime)
+	while true do
+		-- Печать с "_"
+		for i = 1, #text do
+			label.Text = string.sub(text, 1, i) .. "_"
+			task.wait(delayTime or 0.05)
+		end
+		label.Text = text -- финальный без "_"
+		task.wait(0.5)
+
+		-- Стирание с "|"
+		for i = #text, 0, -1 do
+			label.Text = string.sub(text, 1, i) .. "|"
+			task.wait(eraseTime or 0.04)
+		end
+		label.Text = "" -- обнуление
+		task.wait(1.4)
+	end
 end
 
-teleportToSkyRoom()
+-- Плавное появление + запуск анимации
+task.spawn(function()
+	task.wait(0.5)
+	frame.Visible = true
+	for i = 0, 1, 0.05 do
+		frame.BackgroundTransparency = 1 - i
+		task.wait(0.01)
+	end
+	loopTypeErase(subtitle, "by ilyatracher", 0.05, 0.035)
+end)
+
+
+-- Список
+local list = Instance.new("UIListLayout", frame)
+list.Padding = UDim.new(0, 6)
+list.SortOrder = Enum.SortOrder.LayoutOrder
+list.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+-- Отступ
+local spacer = Instance.new("Frame", frame)
+spacer.Size = UDim2.new(1, 0, 0, 60)
+spacer.BackgroundTransparency = 1
+
+-- Функция кнопки
+local function createButton(text, callback)
+	local btn = Instance.new("TextButton", frame)
+	btn.Size = UDim2.new(0.9, 0, 0, 36)
+    btn.Position = UDim2.new(0, 0, 0, 20)
+	btn.Text = text
+	btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	btn.TextColor3 = Color3.new(1, 1, 1)
+	btn.BorderSizePixel = 0
+	btn.Font = Enum.Font.Gotham
+	btn.TextScaled = true
+    createGradient(btn)
+	btn.MouseButton1Click:Connect(callback)
+end
+
+-- Кнопки
+createButton("Врубить хуйню", teleportToSkyRoom)
+createButton("Вырубить хуйню", teleportBack)
+createButton("Delete GUI", function() gui:Destroy() end)
+createButton("Close Menu", function()
+	frame.Visible = false
+	openButton.Visible = true
+end)
+
+-- Слайдер
+local sliderFrame = Instance.new("Frame", frame)
+sliderFrame.Size = UDim2.new(0.9, 0, 0, 40)
+sliderFrame.BackgroundTransparency = 1
+
+local sliderLabel = Instance.new("TextLabel", sliderFrame)
+sliderLabel.Size = UDim2.new(1, 0, 0, 20)
+sliderLabel.Text = "Room height: " .. ROOM_HEIGHT
+sliderLabel.TextColor3 = Color3.new(1, 1, 1)
+sliderLabel.BackgroundTransparency = 1
+sliderLabel.TextScaled = true
+
+local slider = Instance.new("TextButton", sliderFrame)
+slider.Size = UDim2.new(1, 0, 0, 20)
+slider.Position = UDim2.new(0, 0, 0, 20)
+slider.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+slider.Text = ""
+slider.AutoButtonColor = false
+
+local dragging = false
+slider.MouseButton1Down:Connect(function()
+	dragging = true
+end)
+game:GetService("UserInputService").InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = false
+	end
+end)
+slider.InputChanged:Connect(function(input)
+	if dragging and input.Position then
+		local relX = (input.Position.X - slider.AbsolutePosition.X) / slider.AbsoluteSize.X
+		relX = math.clamp(relX, 0, 1)
+		ROOM_HEIGHT = math.floor(13200 + (14000 - 13200) * relX)
+		sliderLabel.Text = "Высота Комнаты: " .. ROOM_HEIGHT
+	end
+end)
+
+frame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		-- Игнорируем если мышка над слайдером
+		local mousePos = UIS:GetMouseLocation()
+		local sliderAbsPos = sliderFrame.AbsolutePosition
+		local sliderAbsSize = sliderFrame.AbsoluteSize
+		if mousePos.X >= sliderAbsPos.X and mousePos.X <= sliderAbsPos.X + sliderAbsSize.X and
+		   mousePos.Y >= sliderAbsPos.Y and mousePos.Y <= sliderAbsPos.Y + sliderAbsSize.Y then
+			return
+		end
+
+		draggingFrame = true
+		dragStart = input.Position
+		startPos = frame.Position
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				draggingFrame = false
+			end
+		end)
+	end
+end)
+
+UIS.InputChanged:Connect(function(input)
+	if draggingFrame and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local delta = input.Position - dragStart
+		frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+end)
+
+-- Кнопка "Открыть Меню"
+openButton.MouseButton1Click:Connect(function()
+	frame.Visible = true
+	openButton.Visible = false
+end)
