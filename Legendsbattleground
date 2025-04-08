@@ -4,11 +4,11 @@ local character = player.Character or player.CharacterAdded:Wait()
 local hrp = character:WaitForChild("HumanoidRootPart")
 
 -- Настройки комнаты
-local ROOM_HEIGHT = 400
+local ROOM_HEIGHT = 13400
 local ROOM_SIZE = 80
-local WALL_HEIGHT = 220
+local WALL_HEIGHT = 520
 local ROOM_NAME = "AutoFarmZone"
-local TRANSPARENCY = 0.3
+local TRANSPARENCY = 0.9
 
 -- Создаёт прозрачную комнату в небе
 local function createSkyRoom()
