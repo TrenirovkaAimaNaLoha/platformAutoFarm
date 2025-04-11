@@ -434,6 +434,65 @@ createSlider("Толщина Пола", 2, 40, FLOOR_THICKNESS, function(val)
 	FLOOR_THICKNESS = val
 end)
 
+local touchStartPosition
+local touchStartFramePosition
+
+-- Обработка касаний для мобильных устройств
+frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        -- Игнорируем если касание над слайдером
+        local touchPos = input.Position
+        local sliderAbsPos = sliderFrame.AbsolutePosition
+        local sliderAbsSize = sliderFrame.AbsoluteSize
+        
+        if touchPos.X >= sliderAbsPos.X and touchPos.X <= sliderAbsPos.X + sliderAbsSize.X and
+           touchPos.Y >= sliderAbsPos.Y and touchPos.Y <= sliderAbsPos.Y + sliderAbsSize.Y then
+            return
+        end
+        
+        draggingFrame = true
+        touchStartPosition = input.Position
+        touchStartFramePosition = frame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                draggingFrame = false
+            end
+        end)
+    end
+end)
+
+-- Обновленная функция InputChanged (замените существующую)
+UIS.InputChanged:Connect(function(input)
+    if draggingFrame then
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(
+                startPos.X.Scale, 
+                startPos.X.Offset + delta.X, 
+                startPos.Y.Scale, 
+                startPos.Y.Offset + delta.Y
+            )
+        elseif input.UserInputType == Enum.UserInputType.Touch then
+            local delta = input.Position - touchStartPosition
+            frame.Position = UDim2.new(
+                touchStartFramePosition.X.Scale, 
+                touchStartFramePosition.X.Offset + delta.X, 
+                touchStartFramePosition.Y.Scale, 
+                touchStartFramePosition.Y.Offset + delta.Y
+            )
+        end
+    end
+end)
+
+-- Также обновите обработчик для кнопки открытия меню для мобильных устройств
+openButton.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        frame.Visible = true
+        openButton.Visible = false
+    end
+end)
+
 
 UIS.InputChanged:Connect(function(input)
 	if draggingFrame and input.UserInputType == Enum.UserInputType.MouseMovement then
