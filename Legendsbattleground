@@ -1,4 +1,5 @@
 local Players = game:GetService("Players")
+local selectedPlatform = "Square"
 local player = Players.LocalPlayer
 local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
 if not hrp then
@@ -28,7 +29,7 @@ local WALL_HEIGHT = 520
 local WALL_THICKNESS = 14
 local FLOOR_THICKNESS = 11
 local ROOM_NAME = "AutoFarmZone"
-local TRANSPARENCY = 0.9
+local TRANSPARENCY = 0.8
 
 local ROOM_HEIGHT = 13400
 local stayInRoom = false
@@ -41,6 +42,37 @@ local function createGradient(parent)
 		ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 255))
 	}
 	uiGradient.Rotation = 45
+end
+
+local function startTransparencyFlicker(parts)
+	task.spawn(function()
+		local increasing = true
+		local currentTransparency = 0.7
+
+		while true do
+			for _, part in ipairs(parts) do
+				if part and part:IsA("BasePart") then
+					part.Transparency = currentTransparency
+				end
+			end
+
+			if increasing then
+				currentTransparency = currentTransparency + 0.01
+				if currentTransparency >= 0.9 then
+					currentTransparency = 0.9
+					increasing = false
+				end
+			else
+				currentTransparency = currentTransparency - 0.01
+				if currentTransparency <= 0.7 then
+					currentTransparency = 0.7
+					increasing = true
+				end
+			end
+
+			task.wait(0.05)
+		end
+	end)
 end
 
 -- Комната в небе
@@ -58,9 +90,10 @@ local function createSkyRoom()
 		return part
 	end
 
-	createPart(Vector3.new(ROOM_SIZE, FLOOR_THICKNESS, ROOM_SIZE), center, "Bright green") -- пол
-	createPart(Vector3.new(ROOM_SIZE, 1, ROOM_SIZE), center + Vector3.new(0, WALL_HEIGHT, 0), "Bright green") -- потолок
+	-- Потолок
+	createPart(Vector3.new(ROOM_SIZE, 1, ROOM_SIZE), center + Vector3.new(0, WALL_HEIGHT, 0), "Bright green")
 
+	-- Стены
 	local wallOffset = ROOM_SIZE / 2
 	local offsets = {
 		Vector3.new(-wallOffset - WALL_THICKNESS / 2, WALL_HEIGHT / 2, 0),
@@ -74,8 +107,52 @@ local function createSkyRoom()
 		createPart(size, center + offset, "Really black")
 	end
 
+	-- Пол по типу платформы
+	if selectedPlatform == "Square" then
+		createPart(Vector3.new(ROOM_SIZE, FLOOR_THICKNESS, ROOM_SIZE), center, "Bright green")
+
+	elseif selectedPlatform == "Circle" then
+		for x = -ROOM_SIZE/2, ROOM_SIZE/2, 5 do
+			for z = -ROOM_SIZE/2, ROOM_SIZE/2, 5 do
+				if (x^2 + z^2) <= (ROOM_SIZE/2)^2 then
+					createPart(Vector3.new(5, FLOOR_THICKNESS, 5), center + Vector3.new(x, 0, z), "Bright green")
+				end
+			end
+		end
+
+	elseif selectedPlatform == "Cross" then
+		local arm = ROOM_SIZE / 4
+		createPart(Vector3.new(ROOM_SIZE, FLOOR_THICKNESS, arm), center, "Bright green")
+		createPart(Vector3.new(arm, FLOOR_THICKNESS, ROOM_SIZE), center, "Bright green")
+
+	elseif selectedPlatform == "Spiral" then
+		local angleStep = math.pi / 12
+		for a = 0, 6 * math.pi, angleStep do
+			local r = a * 2
+			local x = math.cos(a) * r
+			local z = math.sin(a) * r
+			createPart(Vector3.new(6, FLOOR_THICKNESS, 6), center + Vector3.new(x, 0, z), "Bright green")
+		end
+
+	elseif selectedPlatform == "Corners" then
+		local offset = ROOM_SIZE / 2 - 10
+		local size = Vector3.new(20, FLOOR_THICKNESS, 20)
+		local positions = {
+			Vector3.new(-offset, 0, -offset),
+			Vector3.new(offset, 0, -offset),
+			Vector3.new(-offset, 0, offset),
+			Vector3.new(offset, 0, offset),
+		}
+		for _, pos in ipairs(positions) do
+			createPart(size, center + pos, "Bright green")
+		end
+	end
+
 	return center + Vector3.new(0, 5, 0)
 end
+
+
+
 
 -- Телепортация
 local function teleportToSkyRoom()
@@ -118,14 +195,14 @@ gui.ResetOnSpawn = false
 local openButton = Instance.new("TextButton", gui)
 openButton.Size = UDim2.new(0, 120, 0, 40)
 openButton.Position = UDim2.new(0, 10, 0, 10)
-openButton.Text = "Открыть Меню"
+openButton.Text = "Open menu"
 openButton.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 openButton.TextColor3 = Color3.new(1, 1, 1)
 createGradient(openButton)
 
 -- Окно меню
 local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0, 300, 0, 360)
+frame.Size = UDim2.new(0, 300, 0, 560)
 frame.Position = UDim2.new(0.5, -150, 0.5, -140)
 frame.Visible = false
 frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
@@ -220,6 +297,19 @@ local function createButton(text, callback)
 	btn.MouseButton1Click:Connect(callback)
 end
 
+createButton("Форма: " .. selectedPlatform, function()
+	local options = {"Square"}
+	local currentIndex = table.find(options, selectedPlatform)
+	local nextIndex = currentIndex % #options + 1
+	selectedPlatform = options[nextIndex]
+	-- Обновляем текст кнопки
+	for _, child in ipairs(frame:GetChildren()) do
+		if child:IsA("TextButton") and string.find(child.Text, "Форма:") then
+			child.Text = "Форма: " .. selectedPlatform
+		end
+	end
+end)
+
 -- Кнопки
 createButton("Врубить хуйню", teleportToSkyRoom)
 createButton("Вырубить хуйню", teleportBack)
@@ -287,6 +377,63 @@ frame.InputBegan:Connect(function(input)
 		end)
 	end
 end)
+
+local function createSlider(name, min, max, default, onChange)
+	local frame = Instance.new("Frame", frame)
+	frame.Size = UDim2.new(0.9, 0, 0, 40)
+	frame.BackgroundTransparency = 1
+
+	local label = Instance.new("TextLabel", frame)
+	label.Size = UDim2.new(1, 0, 0, 20)
+	label.Text = name .. ": " .. default
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.BackgroundTransparency = 1
+	label.TextScaled = true
+
+	local bar = Instance.new("TextButton", frame)
+	bar.Size = UDim2.new(1, 0, 0, 20)
+	bar.Position = UDim2.new(0, 0, 0, 20)
+	bar.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+	bar.Text = ""
+	bar.AutoButtonColor = false
+
+	local dragging = false
+	bar.MouseButton1Down:Connect(function()
+		dragging = true
+	end)
+	game:GetService("UserInputService").InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+	bar.InputChanged:Connect(function(input)
+		if dragging and input.Position then
+			local relX = (input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X
+			relX = math.clamp(relX, 0, 1)
+			local value = math.floor(min + (max - min) * relX)
+			label.Text = name .. ": " .. value
+			onChange(value)
+		end
+	end)
+end
+
+-- Слайдеры параметров комнаты
+createSlider("Размер Комнаты", 5, 200, ROOM_SIZE, function(val)
+	ROOM_SIZE = val
+end)
+
+createSlider("Толщина Стен", 2, 30, WALL_THICKNESS, function(val)
+	WALL_THICKNESS = val
+end)
+
+createSlider("Высота Стен", 100, 1000, WALL_HEIGHT, function(val)
+	WALL_HEIGHT = val
+end)
+
+createSlider("Толщина Пола", 2, 40, FLOOR_THICKNESS, function(val)
+	FLOOR_THICKNESS = val
+end)
+
 
 UIS.InputChanged:Connect(function(input)
 	if draggingFrame and input.UserInputType == Enum.UserInputType.MouseMovement then
